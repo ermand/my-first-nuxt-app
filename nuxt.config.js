@@ -1,4 +1,5 @@
 const pkg = require('./package');
+const bodyParser = require('body-parser');
 
 module.exports = {
   mode: 'universal',
@@ -35,12 +36,12 @@ module.exports = {
   /*
   ** Plugins to load before mounting the App
   */
-  plugins: [],
+  plugins: ['~plugins/core-components.js', '~plugins/date-filter.js'],
 
   /*
   ** Nuxt.js modules
   */
-  modules: [],
+  modules: ['@nuxtjs/axios'],
 
   /*
   ** Build configuration
@@ -60,5 +61,20 @@ module.exports = {
         });
       }
     }
-  }
+  },
+  env: {
+    baseUrl: process.env.BASE_URL || 'https://nuxt-blog-ed.firebaseio.com',
+    firebaseApiKey:
+      process.env.FIREBASE_API_KEY || ''
+  },
+  transition: {
+    name: 'fade',
+    mode: 'out-in'
+  },
+  axios: {
+    baseURL: process.env.BASE_URL || 'https://nuxt-blog-ed.firebaseio.com',
+    credentials: false
+  },
+
+  serverMiddleware: [bodyParser.json(), '~/api']
 };

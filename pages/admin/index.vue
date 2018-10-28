@@ -2,6 +2,7 @@
   <div class="admin-page">
     <section class="new-post">
       <AppButton @click="$router.push('/admin/new-post')">Create Post</AppButton>
+      <AppButton class="btn-logout" @click="onLogout">Logout</AppButton>
     </section>
     <section class="existing-posts">
       <h1>Existing Posts</h1>
@@ -11,17 +12,17 @@
 </template>
 
 <script>
-import PostList from '~/components/Posts/PostList';
-import AppButton from '~/components/UI/AppButton';
 export default {
   layout: 'admin',
-  components: {
-    PostList,
-    AppButton
-  },
   computed: {
     loadedPosts() {
       return this.$store.getters.loadedPosts;
+    }
+  },
+  methods: {
+    onLogout() {
+      this.$store.dispatch('logout');
+      this.$router.push('/auth');
     }
   }
 };
@@ -40,5 +41,11 @@ export default {
 
 .existing-posts h1 {
   text-align: center;
+}
+
+.btn-logout {
+  background-color: #d74c05;
+  border: 1px solid #f85806;
+  margin-left: 2em;
 }
 </style>

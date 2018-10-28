@@ -107,4 +107,8 @@ export default {
 .nav-item a.nuxt-link-active {
   color: red;
 }
+
+.admin .nav-item a.nuxt-link-active {
+  color: #1f2d6d;
+}
 </style>

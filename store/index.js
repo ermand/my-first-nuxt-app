@@ -1,10 +1,11 @@
 import Vuex from 'vuex';
-import axios from 'axios';
+import Cookie from 'js-cookie';
 
 const createStore = () => {
   return new Vuex.Store({
     state: {
-      loadedPosts: []
+      loadedPosts: [],
+      token: null
     },
     mutations: {
       setPosts(state, posts) {
@@ -18,17 +19,23 @@ const createStore = () => {
           post => post.id === editedPost.id
         );
         state.loadedPosts[postIndex] = editedPost;
+      },
+      setToken(state, token) {
+        state.token = token;
+      },
+      clearToken(state) {
+        state.token = null;
       }
     },
     actions: {
       nuxtServerInit(vuexContext, context) {
-        return axios
-          .get('https://nuxt-blog-ed.firebaseio.com/posts.json')
-          .then(response => {
+        return context.app.$axios
+          .$get('/posts.json')
+          .then(data => {
             const postsArray = [];
 
-            for (const key in response.data) {
-              postsArray.push({ ...response.data[key], id: key });
+            for (const key in data) {
+              postsArray.push({ ...data[key], id: key });
             }
 
             vuexContext.commit('setPosts', postsArray);
@@ -44,33 +51,116 @@ const createStore = () => {
           updatedDate: new Date()
         };
 
-        return axios
-          .post('https://nuxt-blog-ed.firebaseio.com/posts.json', createdPost)
-          .then(response => {
+        return this.$axios
+          .$post('/posts.json?auth=' + vuexContext.state.token, createdPost)
+          .then(data => {
             vuexContext.commit('addPost', {
               ...createdPost,
-              id: response.data.name
+              id: data.name
             });
           })
           .catch(error => console.log('error', error));
       },
       editPost(vuexContext, editedPost) {
-        return axios
-          .put(
-            'https://nuxt-blog-ed.firebaseio.com/posts/' +
-              editedPost.id +
-              '.json',
+        return this.$axios
+          .$put(
+            '/posts/' + editedPost.id + '.json?auth=' + vuexContext.state.token,
             editedPost
           )
           .then(response => {
             vuexContext.commit('editPost', editedPost);
           })
           .catch(error => console.log(error));
+      },
+      authenticateUser(vuexContext, authData) {
+        let authUrl =
+          'https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=' +
+          process.env.firebaseApiKey;
+        if (!authData.isLogin) {
+          authUrl =
+            'https://www.googleapis.com/identitytoolkit/v3/relyingparty/signupNewUser?key=' +
+            process.env.firebaseApiKey;
+        }
+
+        let payload = {
+          email: authData.email,
+          password: authData.password,
+          returnSecureToken: true
+        };
+        return this.$axios
+          .$post(authUrl, payload)
+          .then(response => {
+            let token = response.idToken;
+            let expiresIn = response.expiresIn;
+            vuexContext.commit('setToken', token);
+            let tokenExpiration =
+              new Date().getTime() + parseInt(expiresIn) * 1000;
+
+            localStorage.setItem('token', token);
+            localStorage.setItem('tokenExpiration', tokenExpiration);
+
+            Cookie.set('jwt', token);
+            Cookie.set('expirationDate', tokenExpiration);
+            return this.$axios.$post(
+              'http://localhost:3000' + '/api/track-data',
+              {
+                data: 'Authenticated!'
+              }
+            );
+          })
+          .catch(error => console.log('error', error));
+      },
+      initAuth(vuexContext, req) {
+        let token;
+        let expirationDate;
+        if (req) {
+          if (!req.headers.cookie) {
+            return;
+          }
+          const jwtCookie = req.headers.cookie
+            .split(';')
+            .find(cookie => cookie.trim().startsWith('jwt='));
+          if (!jwtCookie) {
+            return;
+          }
+
+          token = jwtCookie.split('=')[1];
+
+          expirationDate = req.headers.cookie
+            .split(';')
+            .find(cookie => cookie.trim().startsWith('expirationDate='))
+            .split('=')[1];
+        } else if (process.client) {
+          token = localStorage.getItem('token');
+          expirationDate = localStorage.getItem('tokenExpiration');
+        }
+
+        if (new Date().getTime() > parseInt(expirationDate) || !token) {
+          console.log('No token or invalid token');
+          vuexContext.dispatch('logout');
+          return;
+        }
+
+        vuexContext.commit('setToken', token);
+      },
+      logout(vuexContext) {
+        vuexContext.commit('clearToken');
+
+        Cookie.remove('jwt');
+        Cookie.remove('expirationDate');
+
+        if (process.client) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('tokenExpiration');
+        }
       }
     },
     getters: {
       loadedPosts(state) {
         return state.loadedPosts;
+      },
+      isAuthenticated(state) {
+        return state.token != null;
       }
     }
   });
